@@ -75,3 +75,57 @@ jobs:
             allure-report/
             playwright-report/
           retention-days: 30
+
+  # Publica os relatórios no GitHub Pages para abrir direto no navegador.
+  # Roda mesmo se os testes falharem (é quando o relatório mais importa).
+  # Pré-requisito: Settings > Pages > Source = "GitHub Actions".
+  publicar-relatorio:
+    name: 3. Publicar relatório
+    needs: [smoke, regressao]
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Baixar relatórios da execução
+        uses: actions/download-artifact@v8
+        with:
+          pattern: relatorios-*
+          path: site
+      - name: Montar página inicial
+        run: |
+          cd site
+          link() { # $1 = pasta do artefato, $2 = título
+            [ -d "$1" ] || { echo "<li>$2: não executado</li>"; return; }
+            echo "<li><strong>$2</strong>: <a href=\"$1/allure-report/index.html\">Allure</a> · <a href=\"$1/playwright-report/index.html\">Playwright</a></li>"
+          }
+          cat > index.html <<HTML
+          <!doctype html>
+          <html lang="pt-BR"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Relatórios de testes</title>
+          <style>body{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.6}</style>
+          </head><body>
+          <h1>Desafio QA CPB: relatórios de testes</h1>
+          <p>Execução <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">#${{ github.run_number }}</a>
+          · commit ${GITHUB_SHA::7} · $(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M')</p>
+          <ul>
+          $(link relatorios-smoke "Smoke: ${{ needs.smoke.result }}")
+          $(link relatorios-regressao "Regressão: ${{ needs.regressao.result }}")
+          </ul>
+          </body></html>
+          HTML
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - name: Publicar no GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v5
+      - name: Link no resumo da execução
+        run: |
+          echo "### 📊 Relatórios: ${{ steps.deploy.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

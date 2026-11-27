@@ -178,6 +178,8 @@ cp .env.example .env    # depois edite: QA_OWNER=seunome
 | `npm run allure` | gera e abre o **Allure** (resumo, etapas e histórico) |
 | `npm run report` | abre o relatório do **Playwright** (com vídeo e trace das falhas) |
 
+**Da pipeline:** a cada execução na `main`, os relatórios da última execução são publicados no GitHub Pages, em **https://galvaomaster.github.io/desafio-cpb/**. O link também aparece no resumo da execução, na aba **Actions**.
+
 ### 🤔 Entendendo o resultado
 
 ```text
