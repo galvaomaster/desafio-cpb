@@ -1,0 +1,77 @@
+name: Desafio QA CPB - loja virtual
+
+# Pipeline: smoke -> regressão.
+# - Pull request: só o smoke, que bloqueia o merge.
+# - Push na main, agendamento diário e execução manual: smoke e, se passar, a regressão.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 9 * * 1-5' # dias úteis, 06h (horário de Brasília)
+  workflow_dispatch:
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  QA_OWNER: ci${{ github.run_id }} # contas de teste únicas por execução
+
+jobs:
+  smoke:
+    name: 1. Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke
+      - name: Gerar relatório Allure
+        if: always()
+        run: npm run allure:generate
+      - name: Publicar relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-smoke
+          path: |
+            allure-report/
+            playwright-report/
+          retention-days: 14
+
+  regressao:
+    name: 2. Regressão
+    needs: smoke
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:regression
+      - name: Gerar relatório Allure
+        if: always()
+        run: npm run allure:generate
+      - name: Publicar relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relatorios-regressao
+          path: |
+            allure-report/
+            playwright-report/
+          retention-days: 30
